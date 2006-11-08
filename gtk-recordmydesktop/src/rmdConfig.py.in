@@ -1,5 +1,0 @@
-import os
-VERSION='@VERSION@'
-PREFIX='@PREFIX@'
-locale_install_dir=os.path.join('@DATADIR@'.replace("${prefix}",PREFIX), 'locale')
-
