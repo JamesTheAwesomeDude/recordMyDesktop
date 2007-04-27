@@ -1,58 +1,45 @@
-/******************************************************************************
-*                            recordMyDesktop                                  *
-*******************************************************************************
-*                                                                             *
-*            Copyright (C) 2006,2007 John Varouhakis                          *
-*                                                                             *
-*                                                                             *
-*   This program is free software; you can redistribute it and/or modify      *
-*   it under the terms of the GNU General Public License as published by      *
-*   the Free Software Foundation; either version 2 of the License, or         *
-*   (at your option) any later version.                                       *
-*                                                                             *
-*   This program is distributed in the hope that it will be useful,           *
-*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
-*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
-*   GNU General Public License for more details.                              *
-*                                                                             *
-*   You should have received a copy of the GNU General Public License         *
-*   along with this program; if not, write to the Free Software               *
-*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA  *
-*                                                                             *
-*                                                                             *
-*                                                                             *
-*   For further information contact me at johnvarouhakis@gmail.com            *
-******************************************************************************/
+/*********************************************************************************
+*                             recordMyDesktop                                    *
+**********************************************************************************
+*                                                                                *
+*             Copyright (C) 2006  John Varouhakis                                *
+*                                                                                *
+*                                                                                *
+*    This program is free software; you can redistribute it and/or modify        *
+*    it under the terms of the GNU General Public License as published by        *
+*    the Free Software Foundation; either version 2 of the License, or           *
+*    (at your option) any later version.                                         *
+*                                                                                *
+*    This program is distributed in the hope that it will be useful,             *
+*    but WITHOUT ANY WARRANTY; without even the implied warranty of              *
+*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               *
+*    GNU General Public License for more details.                                *
+*                                                                                *
+*    You should have received a copy of the GNU General Public License           *
+*    along with this program; if not, write to the Free Software                 *
+*    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA   *
+*                                                                                *
+*                                                                                *
+*                                                                                *
+*    For further information contact me at biocrasher@gmail.com                  *
+**********************************************************************************/
 
 
 #include <recordmydesktop.h>
 
-void PrintConfig(void){
-    fprintf(stderr,"\nrecordMyDesktop was compiled with"
-                   " the following options:\n\n");
-#ifdef HAVE_JACK_H
-    fprintf(stdout,"Jack\t\t\t:Enabled\n");
-#else
-    fprintf(stdout,"Jack\t\t\t:Disabled\n");
-#endif
-#ifdef HAVE_LIBASOUND
-    fprintf(stdout,"Default Audio Backend\t:ALSA\n");
-#else
-    fprintf(stdout,"Default Audio Backend\t:OSS\n");
-#endif
-    fprintf(stderr,"\n\n");
-}
 
 int ParseArgs(int argc,char **argv,ProgArgs *arg_return){
     int i;
     char *usage="\nUsage:\n"
-    "\trecordmydesktop [OPTIONS]^filename\n\n\n"
+    "\trecordmydesktop [-h| --help| --version| -delay n[H|h|M|m]| -windowid id_of_window|\n"
+    "\t-display DISPLAY| -x X| -y Y|-width N| -height N| -fps N(number>0)|\n"
+    "\t -v_quality n| -s_quality n| -v_bitrate n| -dummy-cursor color| --no-dummy-cursor|\n"
+    "\t -freq N(number>0)| -channels N(number>0)| -device SOUND_DEVICE| --nosound|\n"
+    "\t --with-shared| --full-shots| --scshot| -scale-shot N| -o filename]^filename\n\n\n"
 
     "General Options:\n"
     "\t-h or --help\t\tPrint this help and exit.\n"
-    "\t--version\t\tPrint program version and exit.\n"
-    "\t--print-config\t\tPrint info about options "
-    "selected during compilation and exit.\n\n"
+    "\t--version\t\tPrint program version and exit.\n\n"
 
     "Image Options:\n"
     "\t-windowid id_of_window\tid of window to be recorded.\n"
@@ -62,67 +49,33 @@ int ParseArgs(int argc,char **argv,ProgArgs *arg_return){
     "\t-width N\t\tWidth of recorded window.\n"
     "\t-height N\t\tHeight of recorded window.\n\n"
 
-    "\t-dummy-cursor color\tColor of the dummy cursor [black|white]\n"
-    "\t--no-cursor\t\tDisable drawing of the cursor.\n"
-    "\t--no-shared\t\tDisable usage of"
-    " MIT-shared memory extension(Not Recommended!).\n"
-
+    "\t-dummy-cursor color\tColor of the dummy cursor [black|white](default black)\n"
+    "\t--no-dummy-cursor\tDisable drawing of a dummy cursor.\n"
+    "\t--with-shared\t\tEnable usage of MIT-shared memory extension.\n"
     "\t--full-shots\t\tTake full screenshot at every frame(Not recomended!).\n"
-    "\t--quick-subsampling\tDo subsampling"
-    " of the chroma planes by discarding,not averaging.\n"
-
     "\t-fps N(number>0.0)\tA positive number denoting desired framerate.\n\n"
 
     "Sound Options:\n"
-    "\t-channels N\t\t\tA positive number denoting"
-    " desired sound channels in recording.\n"
-
-    "\t-freq N\t\t\t\tA positive number denoting desired sound frequency.\n"
-    "\t-buffer-size N\t\t\tA positive number denoting the desired"
-    " sound buffer size (in frames,when using ALSA or OSS)\n"
-    "\t-ring-buffer-size N\t\tA float number denoting the desired"
-    " ring buffer size (in seconds,when using JACK only).\n"
-
-    "\t-device SOUND_DEVICE\t\tSound device(default "
-    DEFAULT_AUDIO_DEVICE
-    ").\n"
-    "\t-use-jack port1 port2... portn\tRecord audio from the specified\n"
-    "\t\t\t\t\tlist of space-separated jack ports.\n"
-    "\t--no-sound\t\t\tDo not record sound.\n\n"
+    "\t-channels N(number>0)\tA positive number denoting desired sound channels in recording.\n"
+    "\t-freq N(number>0)\tA positive number denoting desired sound frequency.\n"
+    "\t-device SOUND_DEVICE\tSound device(default hw0:0).\n"
+    "\t--nosound\t\tDo not record sound.\n\n"
 
     "Encoding Options\n"
-    "\t--on-the-fly-encoding\tEncode the audio-video data, while recording.\n"
-    "\t-v_quality n\t\tA number from 0 to 63 for"
-    " desired encoded video quality(default 63).\n"
-
-    "\t-v_bitrate n\t\tA number from 45000 to 2000000"
-    " for desired encoded video bitrate(default 45000).\n"
-
+    "\t-v_quality n\t\tA number from 0 to 63 for desired encoded video quality(default 63).\n"
+    "\t-v_bitrate n\t\tA number from 45000 to 2000000 for desired encoded video bitrate(default 45000).\n"
     "\t-s_quality n\t\tDesired audio quality(-1 to 10).\n\n"
 
     "Misc Options:\n"
-    "\t--no-wm-check\t\tDo not try to detect"
-    " the window manager(and set options according to it)\n"
-
-    "\t--zero-compression\tImage data are always cached uncompressed.\n"
-    "\t-workdir DIR\t\tLocation where a temporary directory"
-    " will be created to hold project files(default $HOME).\n"
-
-    "\t-delay n[H|h|M|m]\tNumber of secs(default),minutes or hours"
-    " before capture starts(number can be float)\n"
-
-    "\t--overwrite\t\tIf there is already a file with the same name,"
-    " delete it\n"
-
-    "\t\t\t\t(default is to add a number postfix to the new one).\n"
+    "\t-delay n[H|h|M|m]\tNumber of secs(default),minutes or hours before capture starts(number can be float)\n"
+    "\t--scshot\t\tTake a bitmap screenshot(default rmdout.bmp) and exit.\n"
+    "\t-scale-shot N\t\tFactor by which screenshot is scaled down(1<=number<=64,power of 2).\n"
     "\t-o filename\t\tName of recorded video(default out.ogg).\n"
-    "\n\tIf no other options are specified, filename can be given "
-    "without the -o switch.\n\n\n";
+    "\n\tIf no other options are specified, filename can be given without the -o switch.\n\n\n";
 
     if(argc==2){
         if(argv[1][0]!='-'){
-            free(arg_return->filename);
-            arg_return->filename=malloc(strlen(argv[1])+1);
+            realloc(arg_return->filename,strlen(argv[1])+1);
             strcpy(arg_return->filename,argv[1]);
             return 0;
         }
@@ -146,14 +99,12 @@ int ParseArgs(int argc,char **argv,ProgArgs *arg_return){
                     arg_return->delay=(int)num;
                 }
                 else{
-                    fprintf(stderr,"Argument Usage: -delay n[H|h|M|m]\n"
-                                   "where n is a float number\n");
+                    fprintf(stderr,"Argument Usage: -delay n[H|h|M|m]\nwhere n is a float number\n");
                     return 1;
                 }
             }
             else{
-                fprintf(stderr,"Argument Usage: -delay n[H|h|M|m]\n"
-                               "where n is a float number\n");
+                fprintf(stderr,"Argument Usage: -delay n[H|h|M|m]\nwhere n is a float number\n");
                 return 1;
             }
             i++;
@@ -164,23 +115,19 @@ int ParseArgs(int argc,char **argv,ProgArgs *arg_return){
                 if(num>0)
                     arg_return->windowid=num;
                 else{
-                    fprintf(stderr,"Argument Usage:"
-                                   " -windowid id_of_window(number)\n");
+                    fprintf(stderr,"Argument Usage: -windowid id_of_window(number)\n");
                     return 1;
                 }
             }
             else{
-                fprintf(stderr,"Argument Usage:"
-                               " -windowid id_of_window(number)\n");
+                fprintf(stderr,"Argument Usage: -windowid id_of_window(number)\n");
                 return 1;
             }
             i++;
         }
         else if(!strcmp(argv[i],"-display")){
             if(i+1<argc){
-                if(arg_return->display!=NULL)
-                    free(arg_return->display);
-                arg_return->display=malloc(strlen(argv[i+1])+1);
+                realloc(arg_return->display,strlen(argv[i+1])+1);
                 strcpy(arg_return->display,argv[i+1]);
             }
             else{
@@ -255,8 +202,7 @@ int ParseArgs(int argc,char **argv,ProgArgs *arg_return){
         }
         else if(!strcmp(argv[i],"-o")){
             if(i+1<argc){
-                free(arg_return->filename);
-                arg_return->filename=malloc(strlen(argv[i+1])+1);
+                realloc(arg_return->filename,strlen(argv[i+1])+1);
                 strcpy(arg_return->filename,argv[i+1]);
             }
             else{
@@ -287,14 +233,12 @@ int ParseArgs(int argc,char **argv,ProgArgs *arg_return){
                 if((num>=0)&&(num<64))
                     arg_return->v_quality=num;
                 else{
-                    fprintf(stderr,"Argument Usage:"
-                                   " -v_quality n(number 0-63)\n");
+                    fprintf(stderr,"Argument Usage: -v_quality n(number 0-63)\n");
                     return 1;
                 }
             }
             else{
-                fprintf(stderr,"Argument Usage:"
-                               " -v_quality n(number 0-63)\n");
+                fprintf(stderr,"Argument Usage: -v_quality n(number 0-63)\n");
                 return 1;
             }
             i++;
@@ -305,14 +249,12 @@ int ParseArgs(int argc,char **argv,ProgArgs *arg_return){
                 if((num>=45000)&&(num<=2000000))
                     arg_return->v_bitrate=num;
                 else{
-                    fprintf(stderr,"Argument Usage:"
-                                   " -v_bitrate n(number 45000-2000000)\n");
+                    fprintf(stderr,"Argument Usage: -v_bitrate n(number 45000-2000000)\n");
                     return 1;
                 }
             }
             else{
-                fprintf(stderr,"Argument Usage:"
-                               " -v_bitrate n(number 45000-2000000)\n");
+                fprintf(stderr,"Argument Usage: -v_bitrate n(number 45000-2000000)\n");
                 return 1;
             }
             i++;
@@ -324,22 +266,18 @@ int ParseArgs(int argc,char **argv,ProgArgs *arg_return){
                 else if(!strcmp(argv[i+1],"black"))
                     arg_return->cursor_color=1;
                 else{
-                    fprintf(stderr,"Argument Usage:"
-                                   " -dummy-cursor [black|white]\n");
+                    fprintf(stderr,"Argument Usage: -dummy-cursor [black|white](default black)\n");
                     return 1;
                 }
-                arg_return->have_dummy_cursor=1;
-                arg_return->xfixes_cursor=0;
             }
             else{
-                fprintf(stderr,"Argument Usage:"
-                               " -dummy-cursor [black|white]\n");
+                fprintf(stderr,"Argument Usage: -dummy-cursor [black|white](default black)\n");
                 return 1;
             }
             i++;
         }
-        else if(!strcmp(argv[i],"--no-cursor"))
-            arg_return->xfixes_cursor=0;
+        else if(!strcmp(argv[i],"--no-dummy-cursor"))
+            arg_return->have_dummy_cursor=0;
         else if(!strcmp(argv[i],"-freq")){
             if(i+1<argc){
                 int num=atoi(argv[i+1]);
@@ -378,22 +316,37 @@ int ParseArgs(int argc,char **argv,ProgArgs *arg_return){
                 if((num>=-1)&&(num<=10))
                     arg_return->s_quality=num;
                 else{
-                    fprintf(stderr,"Argument Usage:"
-                                   " -s_quality n(number -1 to 10)\n");
+                    fprintf(stderr,"Argument Usage: -s_quality n(number -1 to 10)\n");
                     return 1;
                 }
             }
             else{
-                fprintf(stderr,"Argument Usage:"
-                               " -s_quality n(number -1 to 10)\n");
+                fprintf(stderr,"Argument Usage: -s_quality n(number -1 to 10)\n");
+                return 1;
+            }
+            i++;
+        }
+        else if(!strcmp(argv[i],"-scale-shot")){
+            if(i+1<argc){
+                int num=atoi(argv[i+1]);
+                if((num==1)||(num==2)||(num==4)||(num==8)
+                ||(num==16)||(num==32)||(num==64)){
+                    arg_return->scale_shot=num;
+                }
+                else{
+                    fprintf(stderr,"Argument Usage: -scale-shot N(0<number<64,power of 2)\n");
+                    return 1;
+                }
+            }
+            else{
+                fprintf(stderr,"Argument Usage: -scale-shot N(0<number<64,power of 2)\n");
                 return 1;
             }
             i++;
         }
         else if(!strcmp(argv[i],"-device")){
             if(i+1<argc){
-                free(arg_return->device);
-                arg_return->device=malloc(strlen(argv[i+1])+1);
+                realloc(arg_return->device,strlen(argv[i+1])+1);
                 strcpy(arg_return->device,argv[i+1]);
             }
             else{
@@ -402,129 +355,26 @@ int ParseArgs(int argc,char **argv,ProgArgs *arg_return){
             }
             i++;
         }
-        else if(!strcmp(argv[i],"-workdir")){
-            if(i+1<argc){
-                free(arg_return->workdir);
-                arg_return->workdir=malloc(strlen(argv[i+1])+1);
-                strcpy(arg_return->workdir,argv[i+1]);
-            }
-            else{
-                fprintf(stderr,"Argument Usage: -workdir DIR\n");
-                return 1;
-            }
-            i++;
-        }
-        else if(!strcmp(argv[i],"-buffer-size")){
-            if(i+1<argc){
-                int num=atoi(argv[i+1]);
-                if(num>0)
-                    arg_return->buffsize=num;
-                else{
-                    fprintf(stderr,"Argument Usage:"
-                                   " -buffer-size N(number>0)\n");
-                    return 1;
-                }
-            }
-            else{
-                fprintf(stderr,"Argument Usage: -buffer-size N(number>0)\n");
-                return 1;
-            }
-            i++;
-        }
-        else if(!strcmp(argv[i],"-use-jack")){
-            if(i+1<argc){
-#ifdef HAVE_JACK_H
-                int k=i+1;
-                arg_return->jack_nports=0;
-                while((k<argc)&&(argv[k][0]!='-')){
-                    arg_return->jack_nports++;
-                    k++;
-                }
-                if(arg_return->jack_nports>0){
-                    arg_return->jack_port_names=malloc(sizeof(char*)*
-                                                       arg_return->jack_nports);
-                    for(k=i+1;k<i+1+arg_return->jack_nports;k++){
-                        arg_return->jack_port_names[k-i-1]=
-                            malloc(strlen(argv[k])+1);
-                        strcpy(arg_return->jack_port_names[k-i-1],
-                               argv[k]);
-                    }
-                    i+=arg_return->jack_nports;
-                    arg_return->use_jack=1;
-                }
-                else{
-                    fprintf(stderr,"Argument Usage: -use-jack port1"
-                                   " port2... portn\n");
-                    return 1;
-                }
-#else
-                fprintf(stderr,"recordMyDesktop is not compiled"
-                               " with Jack support!\n");
-                return 1;
-#endif
-            }
-            else{
-                fprintf(stderr,"Argument Usage: -use-jack port1"
-                               " port2... portn\n");
-                return 1;
-            }
-        }
-        else if(!strcmp(argv[i],"-ring-buffer-size")){
-            if(i+1<argc){
-                float num=atof(argv[i+1]);
-                if(num>0.0)
-                    arg_return->jack_ringbuffer_secs=num;
-                else{
-                    fprintf(stderr,"Argument Usage: --ring-buffer-size"
-                                   " N(floating point number>0.0)\n");
-                    return 1;
-                }
-            }
-            else{
-                fprintf(stderr,"Argument Usage: --ring-buffer-size"
-                                " N(floating point number>0.0)\n");
-                return 1;
-            }
-            i++;
-        }
-        else if(!strcmp(argv[i],"--no-sound"))
+        else if(!strcmp(argv[i],"--nosound"))
             arg_return->nosound=1;
-        else if(!strcmp(argv[i],"--no-shared")){
-            arg_return->noshared=1;
-        }
-        else if(!strcmp(argv[i],"--full-shots")){
+        else if(!strcmp(argv[i],"--with-shared"))
+            arg_return->noshared=0;
+        else if(!strcmp(argv[i],"--full-shots"))
             arg_return->full_shots=1;
-        }
-        else if(!strcmp(argv[i],"--quick-subsampling")){
-            arg_return->no_quick_subsample=0;
-        }
-        else if(!strcmp(argv[i],"--on-the-fly-encoding")){
-            arg_return->encOnTheFly=1;
-        }
-        else if(!strcmp(argv[i],"--overwrite"))
-            arg_return->overwrite=1;
-        else if(!strcmp(argv[i],"--no-wm-check"))
-            arg_return->nowmcheck=1;
-        else if(!strcmp(argv[i],"--zero-compression")){
-            arg_return->zerocompression=1;
-        }
+        else if(!strcmp(argv[i],"--scshot"))
+            arg_return->scshot=1;
         else if(!strcmp(argv[i],"--help")||!strcmp(argv[i],"-h")){
             fprintf(stderr,"%s",usage);
-            exit(0);
+            return 1;
         }
         else if(!strcmp(argv[i],"--version")){
             fprintf(stderr,"recordMyDesktop v%s\n\n",VERSION);
-            exit(0);
-        }
-        else if(!strcmp(argv[i],"--print-config")){
-            PrintConfig();
-            exit(0);
-        }
-        else{
-            fprintf(stderr,"\n\tError parsing arguments.\n\t"
-                           "Type --help or -h for usage.\n\n");
             return 1;
         }
+        else{
+            fprintf(stderr,"\n\tError parsing arguments.\n\tType --help or -h for usage.\n\n");
+            return 1;
+        }    
     }
     return 0;
 }

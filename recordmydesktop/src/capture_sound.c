@@ -1,168 +1,106 @@
-/******************************************************************************
-*                            recordMyDesktop                                  *
-*******************************************************************************
-*                                                                             *
-*            Copyright (C) 2006,2007 John Varouhakis                          *
-*                                                                             *
-*                                                                             *
-*   This program is free software; you can redistribute it and/or modify      *
-*   it under the terms of the GNU General Public License as published by      *
-*   the Free Software Foundation; either version 2 of the License, or         *
-*   (at your option) any later version.                                       *
-*                                                                             *
-*   This program is distributed in the hope that it will be useful,           *
-*   but WITHOUT ANY WARRANTY; without even the implied warranty of            *
-*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             *
-*   GNU General Public License for more details.                              *
-*                                                                             *
-*   You should have received a copy of the GNU General Public License         *
-*   along with this program; if not, write to the Free Software               *
-*   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA  *
-*                                                                             *
-*                                                                             *
-*                                                                             *
-*   For further information contact me at johnvarouhakis@gmail.com            *
-******************************************************************************/
+/*********************************************************************************
+*                             recordMyDesktop                                    *
+**********************************************************************************
+*                                                                                *
+*             Copyright (C) 2006  John Varouhakis                                *
+*                                                                                *
+*                                                                                *
+*    This program is free software; you can redistribute it and/or modify        *
+*    it under the terms of the GNU General Public License as published by        *
+*    the Free Software Foundation; either version 2 of the License, or           *
+*    (at your option) any later version.                                         *
+*                                                                                *
+*    This program is distributed in the hope that it will be useful,             *
+*    but WITHOUT ANY WARRANTY; without even the implied warranty of              *
+*    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               *
+*    GNU General Public License for more details.                                *
+*                                                                                *
+*    You should have received a copy of the GNU General Public License           *
+*    along with this program; if not, write to the Free Software                 *
+*    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA   *
+*                                                                                *
+*                                                                                *
+*                                                                                *
+*    For further information contact me at biocrasher@gmail.com                  *
+**********************************************************************************/
 
 
 #include <recordmydesktop.h>
 
-void *CaptureSound(ProgData *pdata){
+void *CaptureSound(void *pdata){
 
-#ifdef HAVE_LIBASOUND
-    int frames=pdata->periodsize;
-    int framesize=((snd_pcm_format_width(SND_PCM_FORMAT_S16_LE))/8)*
-                  pdata->args.channels;
-#endif
-    //start capturing only after first frame is taken
-    usleep(pdata->frametime);
+    int frames=((ProgData *)pdata)->periodsize>>((ProgData *)pdata)->args.channels;
+//     fprintf(stderr,"fr %d  ps %d\n",frames,((ProgData *)pdata)->periodsize);fflush(stderr);
+    pthread_mutex_t pmut;
+    pthread_mutex_init(&pmut,NULL);
+    ((ProgData *)pdata)->sound_buffer=NULL;
 
-    while(pdata->running){
+    while(((ProgData *)pdata)->running){
         int sret=0;
         SndBuffer *newbuf,*tmp;
         if(Paused){
-#ifdef HAVE_LIBASOUND
-            if(!pdata->hard_pause){
-                snd_pcm_pause(pdata->sound_handle,1);
-                pthread_mutex_lock(&pause_mutex);
-                pthread_cond_wait(&pdata->pause_cond,&pause_mutex);
-                pthread_mutex_unlock(&pause_mutex);
-                snd_pcm_pause(pdata->sound_handle,0);
+            if(!((ProgData *)pdata)->hard_pause){
+                snd_pcm_pause(((ProgData *)pdata)->sound_handle,1);
+                pthread_cond_wait(&((ProgData *)pdata)->pause_cond,&pmut);
+                snd_pcm_pause(((ProgData *)pdata)->sound_handle,0);
             }
             else{//device doesn't support pause(is this the norm?mine doesn't)
-                snd_pcm_close(pdata->sound_handle);
-                pthread_mutex_lock(&pause_mutex);
-                pthread_cond_wait(&pdata->pause_cond,&pause_mutex);
-                pthread_mutex_unlock(&pause_mutex);
-                pdata->sound_handle=
-                    OpenDev(pdata->args.device,
-                            &pdata->args.channels,
-                            &pdata->args.frequency,
-                            &pdata->args.buffsize,
+                snd_pcm_close(((ProgData *)pdata)->sound_handle);
+                pthread_cond_wait(&((ProgData *)pdata)->pause_cond,&pmut);
+
+                ((ProgData *)pdata)->sound_handle=
+                    OpenDev(((ProgData *)pdata)->args.device,
+                            ((ProgData *)pdata)->args.channels,
+                            &((ProgData *)pdata)->args.frequency,
                             NULL,
                             NULL,
-                            NULL//let's hope that the device capabilities
-                                //didn't magically change
+                            NULL//let's hope that the device capabilities didn't magically change
                             );
-                if(pdata->sound_handle==NULL){
-                    fprintf(stderr,"Couldn't reopen sound device.Exiting\n");
-                    pdata->running=0;
-                    errno=3;
+                if(((ProgData *)pdata)->sound_handle==NULL){
+                    fprintf(stderr,"Couldn't reopen sound device.\nThere will be no sound data from this point on.\n");
                     pthread_exit(&errno);
-                }
+                }                
             }
-#else
-            close(pdata->sound_handle);
-            pthread_mutex_lock(&pause_mutex);
-            pthread_cond_wait(&pdata->pause_cond,&pause_mutex);
-            pthread_mutex_unlock(&pause_mutex);
-            pdata->sound_handle=
-                OpenDev(pdata->args.device,
-                        pdata->args.channels,
-                        pdata->args.frequency);
-            if(pdata->sound_handle<0){
-                fprintf(stderr,"Couldn't reopen sound device.Exiting\n");
-                pdata->running=0;
-                errno=3;
-                pthread_exit(&errno);
-            }
-#endif
         }
 
         //create new buffer
         newbuf=(SndBuffer *)malloc(sizeof(SndBuffer *));
-#ifdef HAVE_LIBASOUND
-        newbuf->data=(signed char *)malloc(frames*framesize);
-#else
-        newbuf->data=(signed char *)malloc(((pdata->args.buffsize<<1)*
-                                            pdata->args.channels));
-#endif
+        newbuf->data=(signed char *)malloc(((ProgData *)pdata)->periodsize);
         newbuf->next=NULL;
-
-        //read data into new buffer
-#ifdef HAVE_LIBASOUND
+       
+        //read data into new buffer 
         while(sret<frames){
-            int temp_sret=snd_pcm_readi(pdata->sound_handle,
-                                newbuf->data+framesize*sret,
+            int tsret=snd_pcm_readi(((ProgData *)pdata)->sound_handle,
+                                newbuf->data+2*((ProgData *)pdata)->args.channels*sret,
                                 frames-sret);
-            if(temp_sret==-EPIPE){
-                fprintf(stderr,"%s: Underrun occurred.\n",
-                               snd_strerror(temp_sret));
-                snd_pcm_prepare(pdata->sound_handle);
-            }
-            else if (temp_sret<0){
-                fprintf(stderr,"An error occured while reading sound data:\n"
-                               " %s\n",
-                               snd_strerror(temp_sret));
-                snd_pcm_prepare(pdata->sound_handle);
+            if(tsret==-EPIPE)
+                snd_pcm_prepare(((ProgData *)pdata)->sound_handle);
+            else if (tsret<0){
+                fprintf(stderr,"An error occured while reading sound data:\n %s\n",snd_strerror(sret));
             }
             else
-                sret+=temp_sret;
+                sret+=tsret;
         }
-#else
-        sret=0;
-        //oss recording loop
-        do{
-            int temp_sret=read(pdata->sound_handle,
-                               &newbuf->data[sret],
-                               ((pdata->args.buffsize<<1)*
-                                pdata->args.channels)-sret);
-            if(temp_sret<0){
-                fprintf(stderr,"An error occured while reading from soundcard"
-                               "%s\n"
-                               "Error description:\n"
-                               "%s\n",pdata->args.device,strerror(errno));
-            }
-            else
-                sret+=temp_sret;
-        }while(sret<((pdata->args.buffsize<<1)*
-                     pdata->args.channels));
-#endif
+
         //queue the new buffer
-        pthread_mutex_lock(&pdata->sound_buffer_mutex);
-        tmp=pdata->sound_buffer;
-        if(pdata->sound_buffer==NULL)
-                pdata->sound_buffer=newbuf;
+        pthread_mutex_lock(&((ProgData *)pdata)->sound_buffer_mutex);
+        tmp=((ProgData *)pdata)->sound_buffer;
+        if(((ProgData *)pdata)->sound_buffer==NULL)
+                ((ProgData *)pdata)->sound_buffer=newbuf;
         else{
             while(tmp->next!=NULL)
                 tmp=tmp->next;
             tmp->next=newbuf;
         }
-        pthread_mutex_unlock(&pdata->sound_buffer_mutex);
+        pthread_mutex_unlock(&((ProgData *)pdata)->sound_buffer_mutex);
 
 
         //signal that there are data to be proccessed
-        pthread_mutex_lock(&pdata->snd_buff_ready_mutex);
-        pthread_cond_signal(&pdata->sound_data_read);
-        pthread_mutex_unlock(&pdata->snd_buff_ready_mutex);
+        pthread_cond_signal(&((ProgData *)pdata)->sound_data_read);
     }
-#ifdef HAVE_LIBASOUND
-    snd_pcm_close(pdata->sound_handle);
-#else
-    close(pdata->sound_handle);
-#endif
+    snd_pcm_close(((ProgData *)pdata)->sound_handle);
     pthread_exit(&errno);
-}
+} 
 
 
 
